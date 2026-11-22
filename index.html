@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-tema="chines">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-Content-Type-Options" content="nosniff">
+  <title>Meu Hub Poliglota — 11 Idiomas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@500;700&family=Noto+Sans+KR:wght@500;700&family=Noto+Sans+SC:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- TELA DE LOGIN -->
+  <div id="telaLogin" class="login-wrapper">
+    <div class="card login-card">
+      <h1>Hub Poliglota</h1>
+      <p class="texto-sec">Espaço pessoal de estudo e rotação de idiomas</p>
+      <form id="formLogin">
+        <label for="inputSenha">Senha de Acesso</label>
+        <input type="password" id="inputSenha" required placeholder="Sua senha privada">
+        <button type="submit" id="btnLogin" class="btn-tema full">Entrar</button>
+      </form>
+      <div id="erroLogin" class="alerta erro"></div>
+    </div>
+  </div>
+
+  <!-- APLICAÇÃO PRINCIPAL -->
+  <div id="appEstudos" class="app-wrapper oculto">
+
+    <!-- TOPO COM BARRA DESLIZÁVEL DE IDIOMAS + GERENCIADOR -->
+    <header class="topo">
+      <div class="barra-idiomas-wrap">
+        <div id="seletorIdioma" class="seletor-idioma" role="group" aria-label="Alternar idioma"></div>
+        <button type="button" id="btnGerenciarIdiomas" class="btn-ghost" title="Ativar/Desativar idiomas">⚙️ Idiomas</button>
+      </div>
+
+      <div class="topo-direita">
+        <span id="statusHoje" class="badge-hoje">Hoje: 0 cards • 0 min</span>
+        <button type="button" id="btnBloquear" class="btn-ghost" title="Bloquear">🔒</button>
+      </div>
+    </header>
+
+    <!-- PAINEL EXPANSÍVEL PARA LIGAR/DESLIGAR OS 11 IDIOMAS -->
+    <section id="painelConfigIdiomas" class="card config-idiomas oculto">
+      <div class="config-topo">
+        <h3>Quais línguas você quer ativas na barra agora?</h3>
+        <button type="button" id="btnFecharConfig" class="btn-ghost">Concluir</button>
+      </div>
+      <div id="gridCheckIdiomas" class="grid-checks"></div>
+    </section>
+
+    <!-- TIMER POMODORO DE ROTAÇÃO -->
+    <section class="barra-rotacao">
+      <div class="rotacao-info">
+        <span class="tag-tema" id="labelRotacao">Rotação: Mandarim</span>
+        <strong id="displayTimer" class="timer-num">25:00</strong>
+      </div>
+      <div class="rotacao-controles">
+        <button type="button" id="btnIniciarTimer" class="btn-tema">▶ Iniciar</button>
+        <button type="button" id="btnResetTimer" class="btn-ghost">↺ 25m</button>
+        <button type="button" id="btnTrocarRotacao" class="btn-ghost">⇄ Próximo Idioma</button>
+      </div>
+    </section>
+
+    <!-- CONTEÚDO DAS ABAS -->
+    <main class="conteudo">
+
+      <!-- ABA 1: REVISÃO DE FLASHCARDS -->
+      <section id="abaRevisar" class="painel ativo">
+        <div class="cabecalho-painel">
+          <h2>Revisão (<span id="qtdPendentes">0</span>)</h2>
+          <div class="filtros-mini">
+            <select id="filtroCatCard">
+              <option value="TODAS">Todas as categorias</option>
+            </select>
+            <label class="toggle-pinyin" id="boxToggleExtra">
+              <input type="checkbox" id="checkOcultarExtra" checked>
+              <span id="labelToggleExtra">Mostrar leitura</span>
+            </label>
+          </div>
+        </div>
+
+        <div id="areaFlashcard" class="card-estudo">
+          <div class="card-topo">
+            <span id="cardCategoria" class="tag-tema">Categoria</span>
+            <span id="cardNivel" class="nivel-pill">Nível 1</span>
+          </div>
+
+          <div class="card-centro">
+            <div id="cardFrente" class="palavra-principal">—</div>
+            <div id="cardExtra" class="leitura-extra">—</div>
+
+            <div id="boxAudio" class="audio-controles">
+              <button type="button" id="btnAudioNormal" class="btn-audio">🔊 Ouvir</button>
+              <button type="button" id="btnAudioLento" class="btn-audio">🐢 Lento</button>
+            </div>
+          </div>
+
+          <div id="cardVerso" class="card-verso oculto">
+            <hr>
+            <div id="cardTraducao" class="traducao-texto">—</div>
+            <p id="cardExemplo" class="exemplo-texto"></p>
+
+            <div class="botoes-srs">
+              <button type="button" class="btn-srs errei" data-res="errei">Errei (Hoje)</button>
+              <button type="button" class="btn-srs bom" data-res="bom">Bom (+dias)</button>
+              <button type="button" class="btn-srs facil" data-res="facil">Fácil (++dias)</button>
+            </div>
+          </div>
+
+          <button type="button" id="btnVirarCard" class="btn-tema full">Mostrar Resposta</button>
+        </div>
+
+        <div id="semCardsHoje" class="card vazio-box oculto">
+          <h3>Tudo revisado neste idioma!</h3>
+          <p class="texto-sec">Adicione novos cards na aba abaixo ou revise todo o baralho.</p>
+          <button type="button" id="btnTreinoLivre" class="btn-ghost" style="margin-top: 1rem;">Revisar todos os cards mesmo assim</button>
+        </div>
+      </section>
+
+      <!-- ABA 2: CRIAR FLASHCARD -->
+      <section id="abaCriar" class="painel">
+        <div class="card">
+          <h2 id="tituloFormCard">Novo Flashcard</h2>
+          <form id="formNovoCard">
+            <label for="cardCatInput">Categoria</label>
+            <input type="text" id="cardCatInput" list="sugestoesCat" placeholder="Ex.: Vocabulário, Verbos, Saudações..." required>
+            <datalist id="sugestoesCat">
+              <option value="Vocabulário">
+              <option value="Frases Úteis">
+              <option value="Gramática">
+              <option value="Verbos">
+            </datalist>
+
+            <label for="cardFrenteInput" id="labelFrente">Palavra / Expressão *</label>
+            <input type="text" id="cardFrenteInput" required>
+
+            <label for="cardExtraInput" id="labelExtra">Leitura / Pronúncia / Plural</label>
+            <input type="text" id="cardExtraInput">
+
+            <label for="cardTraducaoInput">Tradução em Português *</label>
+            <input type="text" id="cardTraducaoInput" required>
+
+            <label for="cardExemploInput">Frase de Exemplo ou Dica</label>
+            <textarea id="cardExemploInput" rows="2"></textarea>
+
+            <button type="submit" id="btnSalvarCard" class="btn-tema full">Salvar Flashcard</button>
+          </form>
+          <div id="msgCard" class="alerta"></div>
+        </div>
+      </section>
+
+      <!-- ABA 3: CADERNO DE ANOTAÇÕES -->
+      <section id="abaNotas" class="painel">
+        <div class="card" style="margin-bottom: 1.25rem;">
+          <h2 id="tituloFormNota">Nova Anotação</h2>
+          <form id="formNovaNota">
+            <div class="grid-2">
+              <div>
+                <label for="notaCat">Categoria</label>
+                <input type="text" id="notaCat" placeholder="Ex.: Gramática, Alfabeto, Pronúncia..." required>
+              </div>
+              <div>
+                <label for="notaTitulo">Título *</label>
+                <input type="text" id="notaTitulo" required>
+              </div>
+            </div>
+
+            <label for="notaConteudo">Anotação *</label>
+            <textarea id="notaConteudo" rows="4" required></textarea>
+
+            <button type="submit" id="btnSalvarNota" class="btn-tema full">Salvar Anotação</button>
+          </form>
+          <div id="msgNota" class="alerta"></div>
+        </div>
+
+        <div class="busca-notas">
+          <input type="text" id="buscaNotaInput" placeholder="🔍 Buscar nas suas anotações...">
+        </div>
+        <div id="listaNotas" class="lista-notas"></div>
+      </section>
+
+      <!-- ABA 4: ESCRITA CRIATIVA -->
+      <section id="abaEscrita" class="painel">
+        <div class="card" style="margin-bottom: 1.25rem;">
+          <div class="cabecalho-escrita">
+            <h2 id="tituloFormEscrita">Escrita Criativa</h2>
+            <button type="button" id="btnSortearPrompt" class="btn-ghost">🎲 Ideia de Tema</button>
+          </div>
+
+          <div id="boxPromptSorteado" class="prompt-box oculto"></div>
+
+          <form id="formNovaEscrita">
+            <label for="escTitulo">Título do Texto / Cena *</label>
+            <input type="text" id="escTitulo" required placeholder="Ex.: Um café chuvoso, Diálogo na estação...">
+
+            <div class="label-com-acao">
+              <label for="escTexto">Seu texto na língua estudada *</label>
+              <button type="button" id="btnOuvirEscrita" class="btn-audio-mini">🔊 Ouvir rascunho</button>
+            </div>
+            <textarea id="escTexto" rows="5" required placeholder="Escreva livremente, crie um mini-diálogo ou descreva uma cena..."></textarea>
+
+            <label for="escTraducao">Tradução ou Notas de Revisão (opcional)</label>
+            <textarea id="escTraducao" rows="2" placeholder="Anote aqui a tradução em português ou palavras novas que você pesquisou..."></textarea>
+
+            <button type="submit" id="btnSalvarEscrita" class="btn-tema full">Salvar Texto Criativo</button>
+          </form>
+          <div id="msgEscrita" class="alerta"></div>
+        </div>
+
+        <div id="listaEscritas" class="lista-notas"></div>
+      </section>
+
+    </main>
+
+    <!-- NAVEGAÇÃO INFERIOR FIXA (4 ABAS) -->
+    <nav class="bottom-nav">
+      <button type="button" class="nav-item ativo" data-painel="abaRevisar">
+        <span>🗂️</span>
+        <small>Revisar</small>
+      </button>
+      <button type="button" class="nav-item" data-painel="abaCriar">
+        <span>➕</span>
+        <small>Novo Card</small>
+      </button>
+      <button type="button" class="nav-item" data-painel="abaNotas">
+        <span>📓</span>
+        <small>Anotações</small>
+      </button>
+      <button type="button" class="nav-item" data-painel="abaEscrita">
+        <span>✍️</span>
+        <small>Escrita</small>
+      </button>
+    </nav>
+
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
