@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
-  <title>Meu Hub Poliglota — 11 Idiomas</title>
+  <title>Hub Poliglota — 12 Idiomas</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@500;700&family=Noto+Sans+KR:wght@500;700&family=Noto+Sans+SC:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@700&display=swap" rel="stylesheet">
@@ -16,10 +16,10 @@
   <div id="telaLogin" class="login-wrapper">
     <div class="card login-card">
       <h1>Hub Poliglota</h1>
-      <p class="texto-sec">Espaço pessoal de estudo e rotação de idiomas</p>
+      <p class="texto-sec">Entre com sua senha individual</p>
       <form id="formLogin">
         <label for="inputSenha">Senha de Acesso</label>
-        <input type="password" id="inputSenha" required placeholder="Sua senha privada">
+        <input type="password" id="inputSenha" required placeholder="Sua senha">
         <button type="submit" id="btnLogin" class="btn-tema full">Entrar</button>
       </form>
       <div id="erroLogin" class="alerta erro"></div>
@@ -37,12 +37,13 @@
       </div>
 
       <div class="topo-direita">
-        <span id="statusHoje" class="badge-hoje">Hoje: 0 cards • 0 min</span>
-        <button type="button" id="btnBloquear" class="btn-ghost" title="Bloquear">🔒</button>
+        <span id="badgeUsuario" class="tag-tema">Perfil</span>
+        <span id="statusHoje" class="badge-hoje">Hoje: 0 cards</span>
+        <button type="button" id="btnBloquear" class="btn-ghost" title="Sair">🔒</button>
       </div>
     </header>
 
-    <!-- PAINEL EXPANSÍVEL PARA LIGAR/DESLIGAR OS 11 IDIOMAS -->
+    <!-- PAINEL EXPANSÍVEL PARA LIGAR/DESLIGAR OS 12 IDIOMAS -->
     <section id="painelConfigIdiomas" class="card config-idiomas oculto">
       <div class="config-topo">
         <h3>Quais línguas você quer ativas na barra agora?</h3>
@@ -67,7 +68,7 @@
     <!-- CONTEÚDO DAS ABAS -->
     <main class="conteudo">
 
-      <!-- ABA 1: REVISÃO DE FLASHCARDS -->
+      <!-- ABA 1: REVISÃO DE FLASHCARDS COM VERIFICAÇÃO AUTOMÁTICA -->
       <section id="abaRevisar" class="painel ativo">
         <div class="cabecalho-painel">
           <h2>Revisão (<span id="qtdPendentes">0</span>)</h2>
@@ -96,6 +97,13 @@
               <button type="button" id="btnAudioNormal" class="btn-audio">🔊 Ouvir</button>
               <button type="button" id="btnAudioLento" class="btn-audio">🐢 Lento</button>
             </div>
+
+            <!-- CAMPO DE RESPOSTA AUTOMÁTICA -->
+            <form id="formCheckResposta" class="box-check-resposta">
+              <input type="text" id="inputRespostaCard" placeholder="Digite a tradução e aperte Enter..." autocomplete="off">
+              <button type="submit" id="btnVerificarCard" class="btn-tema">Verificar</button>
+            </form>
+            <div id="feedbackAutoCard" class="feedback-auto oculto"></div>
           </div>
 
           <div id="cardVerso" class="card-verso oculto">
@@ -110,12 +118,12 @@
             </div>
           </div>
 
-          <button type="button" id="btnVirarCard" class="btn-tema full">Mostrar Resposta</button>
+          <button type="button" id="btnVirarCard" class="btn-ghost full" style="margin-top: 0.75rem;">Só virar o card (sem digitar)</button>
         </div>
 
         <div id="semCardsHoje" class="card vazio-box oculto">
           <h3>Tudo revisado neste idioma!</h3>
-          <p class="texto-sec">Adicione novos cards na aba abaixo ou revise todo o baralho.</p>
+          <p class="texto-sec">Adicione novos cards ou revise todo o baralho.</p>
           <button type="button" id="btnTreinoLivre" class="btn-ghost" style="margin-top: 1rem;">Revisar todos os cards mesmo assim</button>
         </div>
       </section>
@@ -125,19 +133,30 @@
         <div class="card">
           <h2 id="tituloFormCard">Novo Flashcard</h2>
           <form id="formNovoCard">
+            <!-- OPÇÃO DO MODO PROFESSOR PARA ENVIAR CARD DIRETO PRO ALUNO -->
+            <div id="boxEnviarParaAluno" class="box-teacher-check oculto">
+              <label class="check-idioma-item">
+                <input type="checkbox" id="checkParaAluno">
+                <span>🎓 Enviar este card diretamente para o baralho do meu amigo</span>
+              </label>
+            </div>
+
             <label for="cardCatInput">Categoria</label>
-            <input type="text" id="cardCatInput" list="sugestoesCat" placeholder="Ex.: Vocabulário, Verbos, Saudações..." required>
+            <input type="text" id="cardCatInput" list="sugestoesCat" placeholder="Ex.: Survival Phrases, Verbos, Saudações..." required>
             <datalist id="sugestoesCat">
+              <option value="Survival Phrases (Básico)">
+              <option value="Pronouns & To Be">
+              <option value="Daily Verbs">
+              <option value="Numbers & Time">
+              <option value="Food & Drinks">
               <option value="Vocabulário">
-              <option value="Frases Úteis">
               <option value="Gramática">
-              <option value="Verbos">
             </datalist>
 
             <label for="cardFrenteInput" id="labelFrente">Palavra / Expressão *</label>
             <input type="text" id="cardFrenteInput" required>
 
-            <label for="cardExtraInput" id="labelExtra">Leitura / Pronúncia / Plural</label>
+            <label for="cardExtraInput" id="labelExtra">Fonética / Leitura / Plural</label>
             <input type="text" id="cardExtraInput">
 
             <label for="cardTraducaoInput">Tradução em Português *</label>
@@ -160,7 +179,7 @@
             <div class="grid-2">
               <div>
                 <label for="notaCat">Categoria</label>
-                <input type="text" id="notaCat" placeholder="Ex.: Gramática, Alfabeto, Pronúncia..." required>
+                <input type="text" id="notaCat" placeholder="Ex.: Gramática, Pronúncia..." required>
               </div>
               <div>
                 <label for="notaTitulo">Título *</label>
@@ -194,16 +213,16 @@
 
           <form id="formNovaEscrita">
             <label for="escTitulo">Título do Texto / Cena *</label>
-            <input type="text" id="escTitulo" required placeholder="Ex.: Um café chuvoso, Diálogo na estação...">
+            <input type="text" id="escTitulo" required placeholder="Ex.: Apresentação pessoal, No restaurante...">
 
             <div class="label-com-acao">
               <label for="escTexto">Seu texto na língua estudada *</label>
               <button type="button" id="btnOuvirEscrita" class="btn-audio-mini">🔊 Ouvir rascunho</button>
             </div>
-            <textarea id="escTexto" rows="5" required placeholder="Escreva livremente, crie um mini-diálogo ou descreva uma cena..."></textarea>
+            <textarea id="escTexto" rows="5" required placeholder="Escreva livremente na língua que você está praticando..."></textarea>
 
-            <label for="escTraducao">Tradução ou Notas de Revisão (opcional)</label>
-            <textarea id="escTraducao" rows="2" placeholder="Anote aqui a tradução em português ou palavras novas que você pesquisou..."></textarea>
+            <label for="escTraducao">Tradução ou Notas (opcional)</label>
+            <textarea id="escTraducao" rows="2" placeholder="Tradução em português ou palavras novas..."></textarea>
 
             <button type="submit" id="btnSalvarEscrita" class="btn-tema full">Salvar Texto Criativo</button>
           </form>
@@ -213,9 +232,37 @@
         <div id="listaEscritas" class="lista-notas"></div>
       </section>
 
+      <!-- ABA 5: QUIZZES & MODO PROFESSOR -->
+      <section id="abaQuizzes" class="painel">
+        <!-- FORMULÁRIO VISÍVEL APENAS NO MODO PROFESSOR -->
+        <div id="painelCriarQuiz" class="card oculto" style="margin-bottom: 1.25rem; border-color: var(--cor-secundaria);">
+          <div class="cabecalho-escrita">
+            <h2>🎓 Modo Professor — Criar Quiz</h2>
+            <span class="tag-tema" id="quizIdiomaBadge">Idioma</span>
+          </div>
+          <p class="texto-sec" style="margin-bottom: 0.5rem;">Crie exercícios curtos para seu amigo responder pelo celular dele.</p>
+
+          <form id="formNovoQuiz">
+            <label for="quizTitulo">Título da Lição / Quiz *</label>
+            <input type="text" id="quizTitulo" required placeholder="Ex.: Quiz 01 — Verbo To Be & Saudações">
+
+            <label for="quizPerguntas">Perguntas / Exercícios *</label>
+            <textarea id="quizPerguntas" rows="5" required placeholder="1. Como se diz 'Bom dia, tudo bem?' em inglês?&#10;2. Complete: I ___ a student.&#10;3. Traduza: She likes coffee."></textarea>
+
+            <button type="submit" id="btnEnviarQuiz" class="btn-tema full">Enviar Quiz para o Aluno</button>
+          </form>
+          <div id="msgQuiz" class="alerta"></div>
+        </div>
+
+        <div class="cabecalho-painel">
+          <h2 id="tituloListaQuizzes">Quizzes & Lições</h2>
+        </div>
+        <div id="listaQuizzes" class="lista-notas"></div>
+      </section>
+
     </main>
 
-    <!-- NAVEGAÇÃO INFERIOR FIXA (4 ABAS) -->
+    <!-- NAVEGAÇÃO INFERIOR FIXA (5 ABAS) -->
     <nav class="bottom-nav">
       <button type="button" class="nav-item ativo" data-painel="abaRevisar">
         <span>🗂️</span>
@@ -227,11 +274,15 @@
       </button>
       <button type="button" class="nav-item" data-painel="abaNotas">
         <span>📓</span>
-        <small>Anotações</small>
+        <small>Notas</small>
       </button>
       <button type="button" class="nav-item" data-painel="abaEscrita">
         <span>✍️</span>
         <small>Escrita</small>
+      </button>
+      <button type="button" class="nav-item" data-painel="abaQuizzes">
+        <span>📝</span>
+        <small id="navLabelQuiz">Quizzes</small>
       </button>
     </nav>
 

@@ -1,4 +1,4 @@
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyDq4Z67uR2DXWeZxYaZSuB6tg17rNbgsypAZN2UnlminNJ1bVjzrjw9Ey-b0EG0cBUTw/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx7RSmwYy8_Kxd6R25ICUqjqILSwLn5AYYiMrrnysJ5eCQhGLy2e9rQE966l1gh9O-5_g/exec';
 
 const IDIOMAS_CONFIG = {
   Chines: {
@@ -11,6 +11,12 @@ const IDIOMAS_CONFIG = {
     nome: 'Sueco', bandeira: '🇸🇪', tema: 'sueco', voz: 'sv-SE', rotacao: 'Svenska',
     labelFrente: 'Palavra (com en / ett) *', phFrente: 'Ex.: ett äpple',
     labelExtra: 'Plural ou Conjugação', phExtra: 'Ex.: äpplen',
+    ocultavel: false
+  },
+  Ingles: {
+    nome: 'Inglês', bandeira: '🇺🇸', tema: 'ingles', voz: 'en-US', rotacao: 'English',
+    labelFrente: 'Palavra / Frase em Inglês *', phFrente: 'Ex.: Good morning!',
+    labelExtra: 'Dica de Pronúncia / Fonética', phExtra: 'Ex.: gud mór-nin',
     ocultavel: false
   },
   Coreano: {
@@ -70,28 +76,30 @@ const IDIOMAS_CONFIG = {
 };
 
 const PROMPTS_CRIATIVOS = [
-  'Escreva um diálogo curto entre duas pessoas se conhecendo em uma cafeteria.',
-  'Descreva como foi o seu dia hoje usando pelo menos 4 palavras que você aprendeu esta semana.',
-  'Crie um pequeno monólogo de um personagem olhando pela janela em um dia de chuva.',
-  'Imagine que você entrou em uma loja mágica ou livraria antiga: o que você vê e pergunta ao vendedor?',
-  'Escreva uma carta ou mensagem curta para o seu "eu" do futuro contando o que você está estudando agora.',
-  'Descreva sua comida ou bebida favorita e explique por que você gosta dela.',
-  'Crie uma cena rápida de viagem: você acabou de chegar a uma estação de trem e precisa pedir informação.',
-  'Invente um micro-conto de 5 frases sobre um gato que observa a cidade à noite.'
+  'Escreva 3 frases apresentando seu nome, idade e o que você gosta de comer.',
+  'Escreva um diálogo curto pedindo um café ou água em um restaurante.',
+  'Descreva como está o clima hoje e o que você está vestindo.',
+  'Conte o que você fez hoje usando 3 palavras que você aprendeu esta semana.',
+  'Escreva uma mensagem curta para um amigo perguntando como ele está.',
+  'Descreva o seu quarto ou sua mesa de estudos em 4 frases simples.'
 ];
 
-let senhaAtual = sessionStorage.getItem('senha_idiomas') || '';
-let idiomasAtivos = JSON.parse(localStorage.getItem('idiomas_ativos_hub') || '["Chines","Sueco"]');
-let idiomaAtual = idiomasAtivos[0] || 'Chines';
+let senhaAtual = localStorage.getItem('senha_idiomas') || '';
+let usuarioAtual = '';
+let roleAtual = 'student';
+let idiomasAtivos = [];
+let idiomaAtual = 'Chines';
 
 let hojeServidor = '';
 let todosCards = [];
 let todasNotas = [];
 let todasEscritas = [];
+let todosQuizzes = [];
 let todoProgresso = [];
 let filaRevisao = [];
 let indiceCardAtual = 0;
 let modoTreinoLivre = false;
+let bloqueioAutoCard = false;
 
 let segundosRestantes = 25 * 60;
 let intervaloTimer = null;
@@ -102,7 +110,16 @@ function escapeHTML(str) {
   }[m]));
 }
 
-// 1. LOGIN
+function normalizarTexto(str) {
+  return String(str || '')
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[.,!?;:'"()\-]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// 1. LOGIN & ACCOUNT SEPARATION
 document.getElementById('formLogin').addEventListener('submit', async (e) => {
   e.preventDefault();
   const senha = document.getElementById('inputSenha').value;
@@ -116,11 +133,8 @@ document.getElementById('formLogin').addEventListener('submit', async (e) => {
   const ok = await sincronizar(senha);
   if (ok) {
     senhaAtual = senha;
-    sessionStorage.setItem('senha_idiomas', senhaAtual);
-    document.getElementById('telaLogin').classList.add('oculto');
-    document.getElementById('appEstudos').classList.remove('oculto');
-    renderizarBarraIdiomas();
-    aplicarIdioma(idiomaAtual);
+    localStorage.setItem('senha_idiomas', senhaAtual);
+    iniciarInterfaceLogada();
   } else {
     erro.textContent = 'Senha incorreta ou erro de conexão.';
     erro.style.display = 'block';
@@ -130,15 +144,34 @@ document.getElementById('formLogin').addEventListener('submit', async (e) => {
   btn.textContent = 'Entrar';
 });
 
+function iniciarInterfaceLogada() {
+  document.getElementById('telaLogin').classList.add('oculto');
+  document.getElementById('appEstudos').classList.remove('oculto');
+
+  const chaveStorage = `idiomas_ativos_${usuarioAtual}`;
+  const padrao = roleAtual === 'student' ? ['Ingles'] : ['Chines', 'Sueco', 'Ingles'];
+  idiomasAtivos = JSON.parse(localStorage.getItem(chaveStorage) || JSON.stringify(padrao));
+  idiomaAtual = idiomasAtivos[0] || padrao[0];
+
+  const isTeacher = roleAtual === 'teacher';
+  document.getElementById('badgeUsuario').textContent = isTeacher ? `🎓 ${usuarioAtual} (Prof)` : `📖 ${usuarioAtual}`;
+  document.getElementById('boxEnviarParaAluno').classList.toggle('oculto', !isTeacher);
+  document.getElementById('painelCriarQuiz').classList.toggle('oculto', !isTeacher);
+  document.getElementById('navLabelQuiz').textContent = isTeacher ? 'Prof / Quiz' : 'Quizzes';
+
+  renderizarBarraIdiomas();
+  aplicarIdioma(idiomaAtual);
+}
+
 document.getElementById('btnBloquear').addEventListener('click', () => {
-  sessionStorage.removeItem('senha_idiomas');
+  localStorage.removeItem('senha_idiomas');
   senhaAtual = '';
   document.getElementById('appEstudos').classList.add('oculto');
   document.getElementById('telaLogin').classList.remove('oculto');
   document.getElementById('inputSenha').value = '';
 });
 
-// 2. GERENCIAR OS 11 IDIOMAS NA BARRA
+// 2. LANGUAGE SWITCHER (ALL 12 LANGUAGES AVAILABLE TO BOTH ACCOUNTS)
 function renderizarBarraIdiomas() {
   const container = document.getElementById('seletorIdioma');
   container.innerHTML = '';
@@ -179,7 +212,7 @@ document.getElementById('btnGerenciarIdiomas').addEventListener('click', () => {
           }
           idiomasAtivos = idiomasAtivos.filter(i => i !== chave);
         }
-        localStorage.setItem('idiomas_ativos_hub', JSON.stringify(idiomasAtivos));
+        localStorage.setItem(`idiomas_ativos_${usuarioAtual}`, JSON.stringify(idiomasAtivos));
         if (!idiomasAtivos.includes(idiomaAtual)) idiomaAtual = idiomasAtivos[0];
         renderizarBarraIdiomas();
         aplicarIdioma(idiomaAtual);
@@ -211,6 +244,7 @@ function aplicarIdioma(novoIdioma) {
   document.getElementById('tituloFormCard').textContent = `Novo Flashcard de ${cfg.nome}`;
   document.getElementById('tituloFormNota').textContent = `Nova Anotação de ${cfg.nome}`;
   document.getElementById('tituloFormEscrita').textContent = `Escrita Criativa em ${cfg.nome}`;
+  document.getElementById('quizIdiomaBadge').textContent = `${cfg.bandeira} ${cfg.nome}`;
   document.getElementById('labelFrente').textContent = cfg.labelFrente;
   document.getElementById('cardFrenteInput').placeholder = cfg.phFrente;
   document.getElementById('labelExtra').textContent = cfg.labelExtra;
@@ -229,9 +263,10 @@ function aplicarIdioma(novoIdioma) {
   montarFilaRevisao();
   renderizarNotas();
   renderizarEscritas();
+  renderizarQuizzes();
 }
 
-// 3. NAVEGAÇÃO INFERIOR
+// 3. BOTTOM NAVIGATION
 document.querySelectorAll('.nav-item').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('ativo'));
@@ -241,7 +276,7 @@ document.querySelectorAll('.nav-item').forEach(btn => {
   });
 });
 
-// 4. TIMER POMODORO DE ROTAÇÃO
+// 4. TIMER
 function atualizarDisplayTimer() {
   const m = String(Math.floor(segundosRestantes / 60)).padStart(2, '0');
   const s = String(segundosRestantes % 60).padStart(2, '0');
@@ -283,7 +318,7 @@ document.getElementById('btnResetTimer').addEventListener('click', () => {
   atualizarDisplayTimer();
 });
 
-// 5. ÁUDIO NATIVO (FLASHCARDS E ESCRITA CRIATIVA)
+// 5. NATIVE AUDIO
 function falarTextoLivre(texto, velocidade = 1.0) {
   if (!('speechSynthesis' in window) || !texto) return;
   window.speechSynthesis.cancel();
@@ -300,7 +335,7 @@ document.getElementById('btnAudioNormal').addEventListener('click', () => {
 });
 
 document.getElementById('btnAudioLento').addEventListener('click', () => {
-  if (filaRevisao.length > 0) falarTextoLivre(filaRevisao[indiceCardAtual].frente, 0.68);
+  if (filaRevisao.length > 0) falarTextoLivre(filaRevisao[indiceCardAtual].frente, 0.65);
 });
 
 document.getElementById('btnOuvirEscrita').addEventListener('click', () => {
@@ -308,7 +343,7 @@ document.getElementById('btnOuvirEscrita').addEventListener('click', () => {
   if (textoRascunho) falarTextoLivre(textoRascunho, 0.95);
 });
 
-// 6. SINCRONIZAÇÃO E FLASHCARDS
+// 6. SYNC & AUTO-CHECKING FLASHCARDS
 async function sincronizar(senha) {
   try {
     const res = await fetch(SCRIPT_URL, {
@@ -319,17 +354,23 @@ async function sincronizar(senha) {
     const dados = await res.json();
     if (dados.status !== 'ok') return false;
 
+    usuarioAtual = dados.usuario;
+    roleAtual = dados.role;
     hojeServidor = dados.hoje;
     todosCards = dados.cards;
     todasNotas = dados.notas;
     todasEscritas = dados.escritas || [];
+    todosQuizzes = dados.quizzes || [];
     todoProgresso = dados.progresso;
 
-    atualizarBarraProgresso();
-    atualizarFiltroCategorias();
-    montarFilaRevisao();
-    renderizarNotas();
-    renderizarEscritas();
+    if (document.getElementById('appEstudos').classList.contains('oculto') === false) {
+      atualizarBarraProgresso();
+      atualizarFiltroCategorias();
+      montarFilaRevisao();
+      renderizarNotas();
+      renderizarEscritas();
+      renderizarQuizzes();
+    }
     return true;
   } catch (e) {
     return false;
@@ -380,6 +421,7 @@ function montarFilaRevisao() {
 function exibirCardAtual() {
   const boxCard = document.getElementById('areaFlashcard');
   const boxVazio = document.getElementById('semCardsHoje');
+  bloqueioAutoCard = false;
 
   if (filaRevisao.length === 0) {
     boxCard.classList.add('oculto');
@@ -405,9 +447,56 @@ function exibirCardAtual() {
   document.getElementById('cardTraducao').textContent = card.traducao;
   document.getElementById('cardExemplo').textContent = card.exemplo;
 
+  const inputResp = document.getElementById('inputRespostaCard');
+  inputResp.value = '';
+  inputResp.disabled = false;
+  document.getElementById('btnVerificarCard').disabled = false;
+  document.getElementById('feedbackAutoCard').className = 'feedback-auto oculto';
+
   document.getElementById('cardVerso').classList.add('oculto');
   document.getElementById('btnVirarCard').classList.remove('oculto');
 }
+
+// AUTOMATIC ANSWER CHECK + AUTO-ADVANCE TO NEXT CARD
+document.getElementById('formCheckResposta').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (bloqueioAutoCard || filaRevisao.length === 0) return;
+
+  const card = filaRevisao[indiceCardAtual];
+  const digitado = normalizarTexto(document.getElementById('inputRespostaCard').value);
+  if (!digitado) return;
+
+  bloqueioAutoCard = true;
+  document.getElementById('inputRespostaCard').disabled = true;
+  document.getElementById('btnVerificarCard').disabled = true;
+
+  // Accepts any synonym separated by "/" or "," in the translation
+  const opcoesValidas = card.traducao.split(/[\/,]/).map(t => normalizarTexto(t)).filter(Boolean);
+  const acertou = opcoesValidas.includes(digitado);
+
+  const feedback = document.getElementById('feedbackAutoCard');
+  document.getElementById('cardExtra').classList.remove('oculto');
+  falarTextoLivre(card.frente, 1.0);
+
+  if (acertou) {
+    feedback.textContent = `✅ Correto! (${card.traducao}) — Indo para o próximo...`;
+    feedback.className = 'feedback-auto acerto';
+  } else {
+    feedback.textContent = `❌ Resposta certa: ${card.traducao} — Indo para o próximo...`;
+    feedback.className = 'feedback-auto erro';
+  }
+
+  await enviarPost({
+    acao: 'revisar_card',
+    senha: senhaAtual,
+    id: card.id,
+    resultado: acertou ? 'bom' : 'errei'
+  });
+
+  setTimeout(async () => {
+    await sincronizar(senhaAtual);
+  }, 1500);
+});
 
 document.getElementById('btnVirarCard').addEventListener('click', () => {
   document.getElementById('cardVerso').classList.remove('oculto');
@@ -428,7 +517,7 @@ document.querySelectorAll('.btn-srs').forEach(btn => {
   });
 });
 
-// 7. CRIAR CARD E ANOTAÇÃO
+// 7. CREATE CARD & NOTE
 document.getElementById('formNovoCard').addEventListener('submit', async (e) => {
   e.preventDefault();
   const btn = document.getElementById('btnSalvarCard');
@@ -442,6 +531,7 @@ document.getElementById('formNovoCard').addEventListener('submit', async (e) => 
     acao: 'criar_card',
     senha: senhaAtual,
     idioma: idiomaAtual,
+    paraAluno: document.getElementById('checkParaAluno').checked,
     categoria: document.getElementById('cardCatInput').value,
     frente: document.getElementById('cardFrenteInput').value,
     extra: document.getElementById('cardExtraInput').value,
@@ -530,7 +620,7 @@ function renderizarNotas() {
   });
 }
 
-// 8. ESCRITA CRIATIVA
+// 8. CREATIVE WRITING
 document.getElementById('btnSortearPrompt').addEventListener('click', () => {
   const box = document.getElementById('boxPromptSorteado');
   const sorteado = PROMPTS_CRIATIVOS[Math.floor(Math.random() * PROMPTS_CRIATIVOS.length)];
@@ -598,6 +688,144 @@ function renderizarEscritas() {
   });
 }
 
+// 9. QUIZZES & TEACHER MODE
+document.getElementById('formNovoQuiz').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('btnEnviarQuiz');
+  const msg = document.getElementById('msgQuiz');
+
+  btn.disabled = true;
+  btn.textContent = 'Enviando...';
+  msg.className = 'alerta';
+
+  const res = await enviarPost({
+    acao: 'criar_quiz',
+    senha: senhaAtual,
+    idioma: idiomaAtual,
+    titulo: document.getElementById('quizTitulo').value,
+    perguntas: document.getElementById('quizPerguntas').value
+  });
+
+  if (res.status === 'sucesso') {
+    msg.textContent = res.mensagem;
+    msg.className = 'alerta sucesso';
+    e.target.reset();
+    await sincronizar(senhaAtual);
+  } else {
+    msg.textContent = res.mensagem || 'Erro ao enviar quiz.';
+    msg.className = 'alerta erro';
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Enviar Quiz para o Aluno';
+});
+
+function renderizarQuizzes() {
+  const container = document.getElementById('listaQuizzes');
+  const isTeacher = roleAtual === 'teacher';
+
+  // Teachers see all quizzes they created; students see quizzes for the selected language
+  const lista = isTeacher
+    ? todosQuizzes
+    : todosQuizzes.filter(q => q.idioma === idiomaAtual);
+
+  if (lista.length === 0) {
+    container.innerHTML = '<p class="texto-sec" style="text-align:center;">Nenhum quiz disponível aqui ainda.</p>';
+    return;
+  }
+
+  container.innerHTML = '';
+  lista.forEach(q => {
+    const cfg = IDIOMAS_CONFIG[q.idioma] || { bandeira: '📝', nome: q.idioma };
+    const div = document.createElement('article');
+    div.className = 'nota-card';
+
+    let areaInteracao = '';
+
+    if (!isTeacher) {
+      // STUDENT VIEW: Answer form or submitted answers + teacher feedback
+      if (q.status === 'Pendente') {
+        areaInteracao = `
+          <form class="form-resp-quiz" data-id="${q.id}" style="margin-top:0.85rem;">
+            <label>Suas Respostas:</label>
+            <textarea rows="4" required placeholder="Escreva suas respostas aqui..."></textarea>
+            <button type="submit" class="btn-tema full">Enviar Respostas</button>
+          </form>
+        `;
+      } else {
+        areaInteracao = `
+          <div class="quiz-bloco">
+            <strong>Suas Respostas:</strong>
+            <p>${escapeHTML(q.respostas)}</p>
+          </div>
+          ${q.correcao ? `
+            <div class="quiz-bloco" style="border-color: var(--cor-primaria);">
+              <strong>🎓 Correção & Comentários:</strong>
+              <p>${escapeHTML(q.correcao)}</p>
+            </div>
+          ` : '<p class="texto-sec" style="margin-top:0.65rem;">⏳ Aguardando correção...</p>'}
+        `;
+      }
+    } else {
+      // TEACHER VIEW: Grade student submission
+      areaInteracao = `
+        <div class="quiz-bloco">
+          <strong>Respostas do Aluno (${escapeHTML(q.aluno)}):</strong>
+          <p>${q.respostas ? escapeHTML(q.respostas) : 'Ainda não respondido pelo aluno.'}</p>
+        </div>
+        <form class="form-corr-quiz" data-id="${q.id}" style="margin-top:0.85rem;">
+          <label>Sua Correção / Feedback / Nota:</label>
+          <textarea rows="3" required placeholder="Escreva a correção, dicas de gramática ou nota...">${escapeHTML(q.correcao)}</textarea>
+          <button type="submit" class="btn-tema full">Salvar Correção</button>
+        </form>
+      `;
+    }
+
+    div.innerHTML = `
+      <div class="nota-topo">
+        <span class="tag-tema">${cfg.bandeira} ${cfg.nome} • ${escapeHTML(q.data)}</span>
+        <span class="status-pill ${escapeHTML(q.status)}">${escapeHTML(q.status)}</span>
+      </div>
+      <h3>${escapeHTML(q.titulo)}</h3>
+      <div class="quiz-bloco">
+        <strong>Perguntas:</strong>
+        <p>${escapeHTML(q.perguntas)}</p>
+      </div>
+      ${areaInteracao}
+    `;
+
+    // Student submits answers
+    const formResp = div.querySelector('.form-resp-quiz');
+    if (formResp) {
+      formResp.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn = formResp.querySelector('button');
+        const textoResp = formResp.querySelector('textarea').value;
+        btn.disabled = true;
+        btn.textContent = 'Enviando...';
+        await enviarPost({ acao: 'responder_quiz', senha: senhaAtual, id: q.id, respostas: textoResp });
+        await sincronizar(senhaAtual);
+      });
+    }
+
+    // Teacher saves markup/feedback
+    const formCorr = div.querySelector('.form-corr-quiz');
+    if (formCorr) {
+      formCorr.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn = formCorr.querySelector('button');
+        const textoCorr = formCorr.querySelector('textarea').value;
+        btn.disabled = true;
+        btn.textContent = 'Salvando...';
+        await enviarPost({ acao: 'corrigir_quiz', senha: senhaAtual, id: q.id, correcao: textoCorr });
+        await sincronizar(senhaAtual);
+      });
+    }
+
+    container.appendChild(div);
+  });
+}
+
 async function enviarPost(payload) {
   try {
     const res = await fetch(SCRIPT_URL, {
@@ -614,12 +842,9 @@ async function enviarPost(payload) {
 if (senhaAtual) {
   sincronizar(senhaAtual).then(ok => {
     if (ok) {
-      document.getElementById('telaLogin').classList.add('oculto');
-      document.getElementById('appEstudos').classList.remove('oculto');
-      renderizarBarraIdiomas();
-      aplicarIdioma(idiomaAtual);
+      iniciarInterfaceLogada();
     } else {
-      sessionStorage.removeItem('senha_idiomas');
+      localStorage.removeItem('senha_idiomas');
     }
   });
 }
