@@ -1,4 +1,4 @@
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxpEEtBiTCuY1kAhdv3qOB7GY_lD8uIp7LBgOuIWs-3mdY0th1BK9NxQ96eY8QtIKYq3g/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwI2PyEPgVWgchLsWZL9zlFLqW_bVmcc14CC6CRpInN1zytic78OCViI-kGHcPYoYGp2Q/exec';
 
 const IDIOMAS_CONFIG = {
   Chines: {
@@ -98,6 +98,7 @@ let todosQuizzes = [];
 let todoProgresso = [];
 let filaRevisao = [];
 let cardsFeitosSessao = [];
+let historicoChat = [];
 let modoTreinoLivre = false;
 let bloqueioAutoCard = false;
 
@@ -174,6 +175,7 @@ document.getElementById('btnBloquear').addEventListener('click', () => {
   localStorage.removeItem('senha_idiomas');
   senhaAtual = '';
   cardsFeitosSessao = [];
+  historicoChat = [];
   document.getElementById('appEstudos').classList.add('oculto');
   document.getElementById('telaLogin').classList.remove('oculto');
   document.getElementById('inputSenha').value = '';
@@ -251,6 +253,7 @@ function aplicarIdioma(novoIdioma) {
   document.getElementById('labelRotacao').textContent = `Rotação: ${cfg.rotacao}`;
   document.getElementById('tituloFormCard').textContent = `Novo Flashcard de ${cfg.nome}`;
   document.getElementById('tituloFormNota').textContent = `Nova Anotação de ${cfg.nome}`;
+  document.getElementById('tituloChatTutor').textContent = `💬 Tutor Gemini (${cfg.nome})`;
   document.getElementById('tituloFormEscrita').textContent = `Escrita Criativa em ${cfg.nome}`;
   document.getElementById('tituloFormFanfic').textContent = `📖 Estúdio de Fanfics (${cfg.nome})`;
   document.getElementById('quizIdiomaBadge').textContent = `${cfg.bandeira} ${cfg.nome}`;
@@ -259,7 +262,6 @@ function aplicarIdioma(novoIdioma) {
   document.getElementById('labelExtra').textContent = cfg.labelExtra;
   document.getElementById('cardExtraInput').placeholder = cfg.phExtra;
 
-  // Sincroniza o seletor padrão do Laboratório de IA com o idioma atual
   const selOrigem = document.getElementById('iaIdiomaOrigem');
   if (selOrigem) selOrigem.value = novoIdioma;
 
@@ -295,6 +297,7 @@ document.querySelectorAll('.sub-tab-btn').forEach(btn => {
     document.querySelectorAll('.sub-tab-btn').forEach(b => b.classList.remove('ativo'));
     btn.classList.add('ativo');
     const alvo = btn.dataset.sub;
+    document.getElementById('boxChatTutor').classList.toggle('oculto', alvo !== 'boxChatTutor');
     document.getElementById('boxLabIA').classList.toggle('oculto', alvo !== 'boxLabIA');
     document.getElementById('boxEscritaLivre').classList.toggle('oculto', alvo !== 'boxEscritaLivre');
   });
@@ -349,7 +352,6 @@ function falarTextoLivre(texto, velocidade = 1.0, idiomaOverride = null) {
 
   const chaveIdioma = idiomaOverride && IDIOMAS_CONFIG[idiomaOverride] ? idiomaOverride : idiomaAtual;
   const cfg = IDIOMAS_CONFIG[chaveIdioma];
-  // Remove colchetes de lacunas para ler a frase completa naturalmente
   const textoLimpo = texto.replace(/[\[\]]/g, '');
   const fala = new SpeechSynthesisUtterance(textoLimpo);
   fala.lang = idiomaOverride === 'Portugues' ? 'pt-BR' : cfg.voz;
@@ -494,7 +496,6 @@ function exibirCardAtual() {
   document.getElementById('cardCategoria').textContent = card.categoria;
   document.getElementById('cardNivel').textContent = `Nível ${card.nivel}/5`;
 
-  // Verifica se o card tem lacuna entre colchetes: Ex. "Han [tvekade] innan..."
   const frenteEl = document.getElementById('cardFrente');
   const matchLacuna = card.frente.match(/\[([^\]]+)\]/);
   if (matchLacuna) {
@@ -535,7 +536,6 @@ document.getElementById('formCheckResposta').addEventListener('submit', (e) => {
   document.getElementById('inputRespostaCard').disabled = true;
   document.getElementById('btnVerificarCard').disabled = true;
 
-  // Se houver [lacuna], aceita tanto a palavra oculta quanto a tradução cadastrada
   const matchLacuna = card.frente.match(/\[([^\]]+)\]/);
   const respostaAlvo = matchLacuna ? `${matchLacuna[1]}/${card.traducao}` : card.traducao;
 
@@ -703,7 +703,78 @@ function renderizarNotas() {
   });
 }
 
-// 8. LABORATÓRIO DE TRADUÇÃO COM IA
+// 8. CHAT TUTOR GEMINI
+document.getElementById('btnLimparChat').addEventListener('click', () => {
+  historicoChat = [];
+  document.getElementById('areaMensagensChat').innerHTML = `
+    <div class="msg-bot">Conversa limpa! Mande suas palavras ou dúvidas em ${IDIOMAS_CONFIG[idiomaAtual].nome}.</div>
+  `;
+});
+
+document.getElementById('formChatTutor').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const input = document.getElementById('inputChatTutor');
+  const btn = document.getElementById('btnEnviarChat');
+  const erro = document.getElementById('msgErroChat');
+  const textoUser = input.value.trim();
+  if (!textoUser) return;
+
+  erro.style.display = 'none';
+  input.value = '';
+  btn.disabled = true;
+  btn.textContent = '...';
+
+  historicoChat.push({ role: 'user', text: textoUser });
+  adicionarBalaoChat('user', textoUser);
+
+  const res = await enviarPost({
+    acao: 'ia_chat',
+    senha: senhaAtual,
+    idioma: idiomaAtual,
+    historico: historicoChat
+  });
+
+  if (res.status === 'sucesso') {
+    historicoChat.push({ role: 'model', text: res.resposta });
+    adicionarBalaoChat('bot', res.resposta);
+  } else {
+    erro.textContent = res.mensagem === 'SEM_CHAVE'
+      ? 'Configure sua chave do Google AI Studio no Apps Script para usar o chat.'
+      : (res.mensagem || 'Erro ao responder.');
+    erro.style.display = 'block';
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Enviar';
+});
+
+function adicionarBalaoChat(tipo, texto) {
+  const box = document.getElementById('areaMensagensChat');
+  const div = document.createElement('div');
+  div.className = tipo === 'user' ? 'msg-user' : 'msg-bot';
+
+  if (tipo === 'user') {
+    div.textContent = texto;
+  } else {
+    div.innerHTML = `
+      <div>${escapeHTML(texto)}</div>
+      <div class="chat-acoes-bot">
+        <button type="button" class="btn-audio-mini btn-ouvir-chat">🔊 Ouvir</button>
+        <button type="button" class="btn-audio-mini btn-card-chat">➕ Levar p/ Novo Card</button>
+      </div>
+    `;
+    div.querySelector('.btn-ouvir-chat').addEventListener('click', () => falarTextoLivre(texto, 0.95));
+    div.querySelector('.btn-card-chat').addEventListener('click', () => {
+      document.getElementById('cardExemploInput').value = texto.slice(0, 300);
+      document.querySelector('.nav-item[data-painel="abaCriar"]').click();
+    });
+  }
+
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+// 9. LABORATÓRIO DE TRADUÇÃO COM IA
 function popularSelectsIA() {
   const selOrigem = document.getElementById('iaIdiomaOrigem');
   const selDestino = document.getElementById('iaIdiomaDestino');
@@ -831,7 +902,7 @@ document.getElementById('btnSalvarTreinoIA').addEventListener('click', async () 
   btn.textContent = '💾 Salvar no Caderno';
 });
 
-// 9. ESCRITA CRIATIVA COM 3 PALAVRAS DO BARALHO
+// 10. ESCRITA CRIATIVA COM 3 PALAVRAS DO BARALHO
 document.getElementById('escTexto').addEventListener('input', (e) => {
   document.getElementById('contadorPalavrasEscrita').textContent = `${contarPalavras(e.target.value)} palavras`;
 });
@@ -840,7 +911,6 @@ document.getElementById('btnSortearPrompt').addEventListener('click', () => {
   const box = document.getElementById('boxPromptSorteado');
   const tema = PROMPTS_CRIATIVOS[Math.floor(Math.random() * PROMPTS_CRIATIVOS.length)];
 
-  // Sorteia até 3 palavras do baralho atual para você encaixar no texto
   const cardsDoIdioma = todosCards.filter(c => c.idioma === idiomaAtual);
   const embaralhados = [...cardsDoIdioma].sort(() => 0.5 - Math.random()).slice(0, 3);
   const palavrasAlvo = embaralhados.map(c => c.frente.replace(/[\[\]]/g, ''));
@@ -913,7 +983,7 @@ function renderizarEscritas() {
   });
 }
 
-// 10. ESTÚDIO DE FANFICS & HISTÓRIAS
+// 11. ESTÚDIO DE FANFICS & HISTÓRIAS
 document.getElementById('ficConteudo').addEventListener('input', (e) => {
   document.getElementById('contadorPalavrasFic').textContent = `${contarPalavras(e.target.value)} palavras`;
 });
@@ -1033,7 +1103,7 @@ function renderizarFanfics() {
   });
 }
 
-// 11. QUIZZES & MODO PROFESSOR
+// 12. QUIZZES & MODO PROFESSOR
 document.getElementById('formNovoQuiz').addEventListener('submit', async (e) => {
   e.preventDefault();
   const btn = document.getElementById('btnEnviarQuiz');
