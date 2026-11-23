@@ -401,19 +401,40 @@ document.getElementById('checkOcultarExtra').addEventListener('change', exibirCa
 
 document.getElementById('btnTreinoLivre').addEventListener('click', () => {
   modoTreinoLivre = true;
+  cardsFeitosSessao = [];
   montarFilaRevisao();
 });
 
 function montarFilaRevisao() {
   const catFiltro = document.getElementById('filtroCatCard').value;
-  filaRevisao = todosCards.filter(c => {
+
+  const pendentes = todosCards.filter(c => {
     const mesmoIdioma = c.idioma === idiomaAtual;
     const mesmaCat = catFiltro === 'TODAS' || c.categoria === catFiltro;
     const vencidoHoje = modoTreinoLivre || c.proximaRevisao <= hojeServidor;
     return mesmoIdioma && mesmaCat && vencidoHoje;
   });
 
+  const naoVistos = pendentes.filter(c => !cardsFeitosSessao.includes(c.id));
+  const erradosHoje = pendentes.filter(c => cardsFeitosSessao.includes(c.id));
+
+  filaRevisao = [...naoVistos, ...erradosHoje];
   indiceCardAtual = 0;
+  document.getElementById('qtdPendentes').textContent = filaRevisao.length;
+  exibirCardAtual();
+}
+
+function avancarProximoCardLocal(cardId, acertou) {
+  if (!cardsFeitosSessao.includes(cardId)) {
+    cardsFeitosSessao.push(cardId);
+  }
+
+  const cardAtualObj = filaRevisao.shift();
+
+  if (!acertou && cardAtualObj) {
+    filaRevisao.push(cardAtualObj);
+  }
+
   document.getElementById('qtdPendentes').textContent = filaRevisao.length;
   exibirCardAtual();
 }
@@ -432,7 +453,7 @@ function exibirCardAtual() {
   boxCard.classList.remove('oculto');
   boxVazio.classList.add('oculto');
 
-  const card = filaRevisao[indiceCardAtual];
+  const card = filaRevisao[0];
   const cfg = IDIOMAS_CONFIG[idiomaAtual];
 
   document.getElementById('cardCategoria').textContent = card.categoria;
@@ -456,6 +477,74 @@ function exibirCardAtual() {
   document.getElementById('cardVerso').classList.add('oculto');
   document.getElementById('btnVirarCard').classList.remove('oculto');
 }
+
+// VERIFICAÇÃO AUTOMÁTICA + AVANÇO RÁPIDO
+document.getElementById('formCheckResposta').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (bloqueioAutoCard || filaRevisao.length === 0) return;
+
+  const card = filaRevisao[0];
+  const digitado = normalizarTexto(document.getElementById('inputRespostaCard').value);
+  if (!digitado) return;
+
+  bloqueioAutoCard = true;
+  document.getElementById('inputRespostaCard').disabled = true;
+  document.getElementById('btnVerificarCard').disabled = true;
+
+  const opcoesValidas = card.traducao.split(/[\/,]/).map(t => normalizarTexto(t)).filter(Boolean);
+  const acertou = opcoesValidas.includes(digitado);
+
+  const feedback = document.getElementById('feedbackAutoCard');
+  document.getElementById('cardExtra').classList.remove('oculto');
+  falarTextoLivre(card.frente, 1.0);
+
+  if (acertou) {
+    feedback.textContent = `✅ Correto! (${card.traducao})`;
+    feedback.className = 'feedback-auto acerto';
+  } else {
+    feedback.textContent = `❌ Resposta: ${card.traducao} (vai para o fim da fila)`;
+    feedback.className = 'feedback-auto erro';
+  }
+
+  enviarPost({
+    acao: 'revisar_card',
+    senha: senhaAtual,
+    id: card.id,
+    resultado: acertou ? 'bom' : 'errei'
+  }).then(() => {
+    if (acertou) card.proximaRevisao = '9999-12-31';
+  });
+
+  setTimeout(() => {
+    avancarProximoCardLocal(card.id, acertou);
+  }, 1300);
+});
+
+document.getElementById('btnVirarCard').addEventListener('click', () => {
+  document.getElementById('cardVerso').classList.remove('oculto');
+  document.getElementById('btnVirarCard').classList.add('oculto');
+  document.getElementById('cardExtra').classList.remove('oculto');
+});
+
+document.querySelectorAll('.btn-srs').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (filaRevisao.length === 0) return;
+    const card = filaRevisao[0];
+    const res = btn.dataset.res;
+    const acertou = res !== 'errei';
+
+    enviarPost({
+      acao: 'revisar_card',
+      senha: senhaAtual,
+      id: card.id,
+      resultado: res
+    }).then(() => {
+      if (acertou) card.proximaRevisao = '9999-12-31';
+    });
+
+    avancarProximoCardLocal(card.id, acertou);
+  });
+});
 
 // AUTOMATIC ANSWER CHECK + AUTO-ADVANCE TO NEXT CARD
 document.getElementById('formCheckResposta').addEventListener('submit', async (e) => {
