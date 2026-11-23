@@ -1,4 +1,4 @@
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwp9bdOUFwlHbcMeO2fz15grDcifj9sMaWLkuM_zN6lJRBvP2QeCbVZYWXDJhekkamrzw/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxpEEtBiTCuY1kAhdv3qOB7GY_lD8uIp7LBgOuIWs-3mdY0th1BK9NxQ96eY8QtIKYq3g/exec';
 
 const IDIOMAS_CONFIG = {
   Chines: {
@@ -9,8 +9,8 @@ const IDIOMAS_CONFIG = {
   },
   Sueco: {
     nome: 'Sueco', bandeira: '🇸🇪', tema: 'sueco', voz: 'sv-SE', rotacao: 'Svenska',
-    labelFrente: 'Palavra (com en / ett) *', phFrente: 'Ex.: ett äpple',
-    labelExtra: 'Plural ou Conjugação', phExtra: 'Ex.: äpplen',
+    labelFrente: 'Palavra ou Frase com [lacuna] *', phFrente: 'Ex.: Han [tvekade] innan han gick.',
+    labelExtra: 'Plural / Conjugação / Tradução da frase', phExtra: 'Ex.: Ele hesitou antes de sair',
     ocultavel: false
   },
   Ingles: {
@@ -76,12 +76,11 @@ const IDIOMAS_CONFIG = {
 };
 
 const PROMPTS_CRIATIVOS = [
-  'Escreva 3 frases apresentando seu nome, idade e o que você gosta de comer.',
-  'Escreva um diálogo curto pedindo um café ou água em um restaurante.',
-  'Descreva como está o clima hoje e o que você está vestindo.',
-  'Conte o que você fez hoje usando 3 palavras que você aprendeu esta semana.',
-  'Escreva uma mensagem curta para um amigo perguntando como ele está.',
-  'Descreva o seu quarto ou sua mesa de estudos em 4 frases simples.'
+  'Escreva um diálogo tenso entre dois personagens que guardam um segredo.',
+  'Descreva uma cena noturna chuvosa usando detalhes sensoriais (sons, luzes, cheiros).',
+  'Escreva uma carta ou mensagem que um personagem hesita em enviar.',
+  'Crie um diálogo curto pedindo ajuda ou informação em uma situação urgente.',
+  'Descreva o reencontro de dois amigos depois de anos sem se verem.'
 ];
 
 let senhaAtual = localStorage.getItem('senha_idiomas') || '';
@@ -94,10 +93,11 @@ let hojeServidor = '';
 let todosCards = [];
 let todasNotas = [];
 let todasEscritas = [];
+let todasFanfics = [];
 let todosQuizzes = [];
 let todoProgresso = [];
 let filaRevisao = [];
-let indiceCardAtual = 0;
+let cardsFeitosSessao = [];
 let modoTreinoLivre = false;
 let bloqueioAutoCard = false;
 
@@ -119,7 +119,13 @@ function normalizarTexto(str) {
     .trim();
 }
 
-// 1. LOGIN & ACCOUNT SEPARATION
+function contarPalavras(texto) {
+  const limpo = String(texto || '').trim();
+  if (!limpo) return 0;
+  return limpo.split(/\s+/).length;
+}
+
+// 1. LOGIN
 document.getElementById('formLogin').addEventListener('submit', async (e) => {
   e.preventDefault();
   const senha = document.getElementById('inputSenha').value;
@@ -159,6 +165,7 @@ function iniciarInterfaceLogada() {
   document.getElementById('painelCriarQuiz').classList.toggle('oculto', !isTeacher);
   document.getElementById('navLabelQuiz').textContent = isTeacher ? 'Prof / Quiz' : 'Quizzes';
 
+  popularSelectsIA();
   renderizarBarraIdiomas();
   aplicarIdioma(idiomaAtual);
 }
@@ -166,12 +173,13 @@ function iniciarInterfaceLogada() {
 document.getElementById('btnBloquear').addEventListener('click', () => {
   localStorage.removeItem('senha_idiomas');
   senhaAtual = '';
+  cardsFeitosSessao = [];
   document.getElementById('appEstudos').classList.add('oculto');
   document.getElementById('telaLogin').classList.remove('oculto');
   document.getElementById('inputSenha').value = '';
 });
 
-// 2. LANGUAGE SWITCHER (ALL 12 LANGUAGES AVAILABLE TO BOTH ACCOUNTS)
+// 2. SELETOR DOS 12 IDIOMAS
 function renderizarBarraIdiomas() {
   const container = document.getElementById('seletorIdioma');
   container.innerHTML = '';
@@ -244,11 +252,16 @@ function aplicarIdioma(novoIdioma) {
   document.getElementById('tituloFormCard').textContent = `Novo Flashcard de ${cfg.nome}`;
   document.getElementById('tituloFormNota').textContent = `Nova Anotação de ${cfg.nome}`;
   document.getElementById('tituloFormEscrita').textContent = `Escrita Criativa em ${cfg.nome}`;
+  document.getElementById('tituloFormFanfic').textContent = `📖 Estúdio de Fanfics (${cfg.nome})`;
   document.getElementById('quizIdiomaBadge').textContent = `${cfg.bandeira} ${cfg.nome}`;
   document.getElementById('labelFrente').textContent = cfg.labelFrente;
   document.getElementById('cardFrenteInput').placeholder = cfg.phFrente;
   document.getElementById('labelExtra').textContent = cfg.labelExtra;
   document.getElementById('cardExtraInput').placeholder = cfg.phExtra;
+
+  // Sincroniza o seletor padrão do Laboratório de IA com o idioma atual
+  const selOrigem = document.getElementById('iaIdiomaOrigem');
+  if (selOrigem) selOrigem.value = novoIdioma;
 
   const boxToggle = document.getElementById('boxToggleExtra');
   if (cfg.ocultavel) {
@@ -263,10 +276,11 @@ function aplicarIdioma(novoIdioma) {
   montarFilaRevisao();
   renderizarNotas();
   renderizarEscritas();
+  renderizarFanfics();
   renderizarQuizzes();
 }
 
-// 3. BOTTOM NAVIGATION
+// 3. NAVEGAÇÃO INFERIOR & SUB-ABAS
 document.querySelectorAll('.nav-item').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('ativo'));
@@ -276,7 +290,17 @@ document.querySelectorAll('.nav-item').forEach(btn => {
   });
 });
 
-// 4. TIMER
+document.querySelectorAll('.sub-tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.sub-tab-btn').forEach(b => b.classList.remove('ativo'));
+    btn.classList.add('ativo');
+    const alvo = btn.dataset.sub;
+    document.getElementById('boxLabIA').classList.toggle('oculto', alvo !== 'boxLabIA');
+    document.getElementById('boxEscritaLivre').classList.toggle('oculto', alvo !== 'boxEscritaLivre');
+  });
+});
+
+// 4. TIMER POMODORO
 function atualizarDisplayTimer() {
   const m = String(Math.floor(segundosRestantes / 60)).padStart(2, '0');
   const s = String(segundosRestantes % 60).padStart(2, '0');
@@ -318,24 +342,27 @@ document.getElementById('btnResetTimer').addEventListener('click', () => {
   atualizarDisplayTimer();
 });
 
-// 5. NATIVE AUDIO
-function falarTextoLivre(texto, velocidade = 1.0) {
+// 5. ÁUDIO NATIVO
+function falarTextoLivre(texto, velocidade = 1.0, idiomaOverride = null) {
   if (!('speechSynthesis' in window) || !texto) return;
   window.speechSynthesis.cancel();
 
-  const cfg = IDIOMAS_CONFIG[idiomaAtual];
-  const fala = new SpeechSynthesisUtterance(texto);
-  fala.lang = cfg.voz;
+  const chaveIdioma = idiomaOverride && IDIOMAS_CONFIG[idiomaOverride] ? idiomaOverride : idiomaAtual;
+  const cfg = IDIOMAS_CONFIG[chaveIdioma];
+  // Remove colchetes de lacunas para ler a frase completa naturalmente
+  const textoLimpo = texto.replace(/[\[\]]/g, '');
+  const fala = new SpeechSynthesisUtterance(textoLimpo);
+  fala.lang = idiomaOverride === 'Portugues' ? 'pt-BR' : cfg.voz;
   fala.rate = velocidade;
   window.speechSynthesis.speak(fala);
 }
 
 document.getElementById('btnAudioNormal').addEventListener('click', () => {
-  if (filaRevisao.length > 0) falarTextoLivre(filaRevisao[indiceCardAtual].frente, 1.0);
+  if (filaRevisao.length > 0) falarTextoLivre(filaRevisao[0].frente, 1.0);
 });
 
 document.getElementById('btnAudioLento').addEventListener('click', () => {
-  if (filaRevisao.length > 0) falarTextoLivre(filaRevisao[indiceCardAtual].frente, 0.65);
+  if (filaRevisao.length > 0) falarTextoLivre(filaRevisao[0].frente, 0.65);
 });
 
 document.getElementById('btnOuvirEscrita').addEventListener('click', () => {
@@ -343,7 +370,12 @@ document.getElementById('btnOuvirEscrita').addEventListener('click', () => {
   if (textoRascunho) falarTextoLivre(textoRascunho, 0.95);
 });
 
-// 6. SYNC & AUTO-CHECKING FLASHCARDS
+document.getElementById('btnOuvirFic').addEventListener('click', () => {
+  const textoFic = document.getElementById('ficConteudo').value.trim();
+  if (textoFic) falarTextoLivre(textoFic, 0.95);
+});
+
+// 6. SINCRONIZAÇÃO & FLASHCARDS (COM SUPORTE A [LACUNAS])
 async function sincronizar(senha) {
   try {
     const res = await fetch(SCRIPT_URL, {
@@ -358,16 +390,16 @@ async function sincronizar(senha) {
     roleAtual = dados.role;
     hojeServidor = dados.hoje;
 
-    // Cria um identificador único por linha (_uid) para evitar conflito se houver IDs repetidos na planilha
     todosCards = (dados.cards || []).map((c, idx) => ({
       ...c,
       _uid: `${c.id}_${idx}_${c.frente}`
     }));
 
-    todasNotas = dados.notas;
+    todasNotas = dados.notas || [];
     todasEscritas = dados.escritas || [];
+    todasFanfics = dados.fanfics || [];
     todosQuizzes = dados.quizzes || [];
-    todoProgresso = dados.progresso;
+    todoProgresso = dados.progresso || [];
 
     if (document.getElementById('appEstudos').classList.contains('oculto') === false) {
       atualizarBarraProgresso();
@@ -375,6 +407,7 @@ async function sincronizar(senha) {
       montarFilaRevisao();
       renderizarNotas();
       renderizarEscritas();
+      renderizarFanfics();
       renderizarQuizzes();
     }
     return true;
@@ -425,7 +458,6 @@ function montarFilaRevisao() {
   const erradosHoje = pendentes.filter(c => cardsFeitosSessao.includes(c._uid));
 
   filaRevisao = [...naoVistos, ...erradosHoje];
-  indiceCardAtual = 0;
   document.getElementById('qtdPendentes').textContent = filaRevisao.length;
   exibirCardAtual();
 }
@@ -434,15 +466,10 @@ function avancarProximoCardLocal(cardObj, acertou) {
   if (!cardsFeitosSessao.includes(cardObj._uid)) {
     cardsFeitosSessao.push(cardObj._uid);
   }
-
-  // Remove exatamente o card que acabou de ser respondido
   filaRevisao = filaRevisao.filter(c => c._uid !== cardObj._uid);
-
-  // Se errou, coloca esse card no final da fila de hoje (só volta depois de todos os outros)
   if (!acertou) {
     filaRevisao.push(cardObj);
   }
-
   document.getElementById('qtdPendentes').textContent = filaRevisao.length;
   exibirCardAtual();
 }
@@ -466,7 +493,16 @@ function exibirCardAtual() {
 
   document.getElementById('cardCategoria').textContent = card.categoria;
   document.getElementById('cardNivel').textContent = `Nível ${card.nivel}/5`;
-  document.getElementById('cardFrente').textContent = card.frente;
+
+  // Verifica se o card tem lacuna entre colchetes: Ex. "Han [tvekade] innan..."
+  const frenteEl = document.getElementById('cardFrente');
+  const matchLacuna = card.frente.match(/\[([^\]]+)\]/);
+  if (matchLacuna) {
+    const escondida = escapeHTML(card.frente).replace(/\[([^\]]+)\]/, '<span class="lacuna-destaque">[ ___ ]</span>');
+    frenteEl.innerHTML = escondida;
+  } else {
+    frenteEl.textContent = card.frente;
+  }
 
   const extraEl = document.getElementById('cardExtra');
   const mostrarLeitura = document.getElementById('checkOcultarExtra').checked;
@@ -479,6 +515,7 @@ function exibirCardAtual() {
   const inputResp = document.getElementById('inputRespostaCard');
   inputResp.value = '';
   inputResp.disabled = false;
+  inputResp.placeholder = matchLacuna ? 'Digite a palavra que falta na lacuna...' : 'Digite a tradução e aperte Enter...';
   document.getElementById('btnVerificarCard').disabled = false;
   document.getElementById('feedbackAutoCard').className = 'feedback-auto oculto';
 
@@ -486,7 +523,6 @@ function exibirCardAtual() {
   document.getElementById('btnVirarCard').classList.remove('oculto');
 }
 
-// VERIFICAÇÃO AUTOMÁTICA + AVANÇO RÁPIDO
 document.getElementById('formCheckResposta').addEventListener('submit', (e) => {
   e.preventDefault();
   if (bloqueioAutoCard || filaRevisao.length === 0) return;
@@ -499,19 +535,30 @@ document.getElementById('formCheckResposta').addEventListener('submit', (e) => {
   document.getElementById('inputRespostaCard').disabled = true;
   document.getElementById('btnVerificarCard').disabled = true;
 
-  const opcoesValidas = card.traducao.split(/[\/,]/).map(t => normalizarTexto(t)).filter(Boolean);
+  // Se houver [lacuna], aceita tanto a palavra oculta quanto a tradução cadastrada
+  const matchLacuna = card.frente.match(/\[([^\]]+)\]/);
+  const respostaAlvo = matchLacuna ? `${matchLacuna[1]}/${card.traducao}` : card.traducao;
+
+  const opcoesValidas = respostaAlvo.split(/[\/,]/).map(t => normalizarTexto(t)).filter(Boolean);
   const acertou = opcoesValidas.includes(digitado);
+
+  if (matchLacuna) {
+    document.getElementById('cardFrente').innerHTML = escapeHTML(card.frente).replace(
+      /\[([^\]]+)\]/,
+      `<span class="lacuna-destaque">${escapeHTML(matchLacuna[1])}</span>`
+    );
+  }
 
   const feedback = document.getElementById('feedbackAutoCard');
   document.getElementById('cardExtra').classList.remove('oculto');
   falarTextoLivre(card.frente, 1.0);
 
   if (acertou) {
-    feedback.textContent = `✅ Correto! (${card.traducao})`;
+    feedback.textContent = `✅ Correto! (${matchLacuna ? matchLacuna[1] + ' — ' : ''}${card.traducao})`;
     feedback.className = 'feedback-auto acerto';
     card.proximaRevisao = '9999-12-31';
   } else {
-    feedback.textContent = `❌ Resposta: ${card.traducao} (vai para o fim da fila)`;
+    feedback.textContent = `❌ Resposta: ${matchLacuna ? matchLacuna[1] + ' (' + card.traducao + ')' : card.traducao}`;
     feedback.className = 'feedback-auto erro';
   }
 
@@ -524,7 +571,7 @@ document.getElementById('formCheckResposta').addEventListener('submit', (e) => {
 
   setTimeout(() => {
     avancarProximoCardLocal(card, acertou);
-  }, 1200);
+  }, 1300);
 });
 
 document.getElementById('btnVirarCard').addEventListener('click', () => {
@@ -540,9 +587,7 @@ document.querySelectorAll('.btn-srs').forEach(btn => {
     const res = btn.dataset.res;
     const acertou = res !== 'errei';
 
-    if (acertou) {
-      card.proximaRevisao = '9999-12-31';
-    }
+    if (acertou) card.proximaRevisao = '9999-12-31';
 
     enviarPost({
       acao: 'revisar_card',
@@ -555,67 +600,7 @@ document.querySelectorAll('.btn-srs').forEach(btn => {
   });
 });
 
-// AUTOMATIC ANSWER CHECK + AUTO-ADVANCE TO NEXT CARD
-document.getElementById('formCheckResposta').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  if (bloqueioAutoCard || filaRevisao.length === 0) return;
-
-  const card = filaRevisao[indiceCardAtual];
-  const digitado = normalizarTexto(document.getElementById('inputRespostaCard').value);
-  if (!digitado) return;
-
-  bloqueioAutoCard = true;
-  document.getElementById('inputRespostaCard').disabled = true;
-  document.getElementById('btnVerificarCard').disabled = true;
-
-  // Accepts any synonym separated by "/" or "," in the translation
-  const opcoesValidas = card.traducao.split(/[\/,]/).map(t => normalizarTexto(t)).filter(Boolean);
-  const acertou = opcoesValidas.includes(digitado);
-
-  const feedback = document.getElementById('feedbackAutoCard');
-  document.getElementById('cardExtra').classList.remove('oculto');
-  falarTextoLivre(card.frente, 1.0);
-
-  if (acertou) {
-    feedback.textContent = `✅ Correto! (${card.traducao}) — Indo para o próximo...`;
-    feedback.className = 'feedback-auto acerto';
-  } else {
-    feedback.textContent = `❌ Resposta certa: ${card.traducao} — Indo para o próximo...`;
-    feedback.className = 'feedback-auto erro';
-  }
-
-  await enviarPost({
-    acao: 'revisar_card',
-    senha: senhaAtual,
-    id: card.id,
-    resultado: acertou ? 'bom' : 'errei'
-  });
-
-  setTimeout(async () => {
-    await sincronizar(senhaAtual);
-  }, 1500);
-});
-
-document.getElementById('btnVirarCard').addEventListener('click', () => {
-  document.getElementById('cardVerso').classList.remove('oculto');
-  document.getElementById('btnVirarCard').classList.add('oculto');
-  document.getElementById('cardExtra').classList.remove('oculto');
-});
-
-document.querySelectorAll('.btn-srs').forEach(btn => {
-  btn.addEventListener('click', async () => {
-    const card = filaRevisao[indiceCardAtual];
-    await enviarPost({
-      acao: 'revisar_card',
-      senha: senhaAtual,
-      id: card.id,
-      resultado: btn.dataset.res
-    });
-    await sincronizar(senhaAtual);
-  });
-});
-
-// 7. CREATE CARD & NOTE
+// 7. CRIAR CARD & ANOTAÇÃO
 document.getElementById('formNovoCard').addEventListener('submit', async (e) => {
   e.preventDefault();
   const btn = document.getElementById('btnSalvarCard');
@@ -718,11 +703,152 @@ function renderizarNotas() {
   });
 }
 
-// 8. CREATIVE WRITING
+// 8. LABORATÓRIO DE TRADUÇÃO COM IA
+function popularSelectsIA() {
+  const selOrigem = document.getElementById('iaIdiomaOrigem');
+  const selDestino = document.getElementById('iaIdiomaDestino');
+  selOrigem.innerHTML = '';
+  selDestino.innerHTML = '';
+
+  const opcoes = [
+    { val: 'Portugues', label: '🇧🇷 Português' },
+    ...Object.keys(IDIOMAS_CONFIG).map(k => ({ val: k, label: `${IDIOMAS_CONFIG[k].bandeira} ${IDIOMAS_CONFIG[k].nome}` }))
+  ];
+
+  opcoes.forEach(op => {
+    selOrigem.add(new Option(op.label, op.val));
+    selDestino.add(new Option(op.label, op.val));
+  });
+
+  selOrigem.value = idiomaAtual;
+  selDestino.value = 'Portugues';
+}
+
+document.getElementById('btnGerarTextoIA').addEventListener('click', async () => {
+  const btn = document.getElementById('btnGerarTextoIA');
+  const msg = document.getElementById('msgIA');
+  const origem = document.getElementById('iaIdiomaOrigem').value;
+  const destino = document.getElementById('iaIdiomaDestino').value;
+  const nivel = document.getElementById('iaNivel').value;
+  const genero = document.getElementById('iaGenero').value;
+
+  btn.disabled = true;
+  btn.textContent = '✨ Gerando história...';
+  msg.className = 'alerta';
+  document.getElementById('boxFeedbackIA').classList.add('oculto');
+
+  const res = await enviarPost({
+    acao: 'ia_gerar_texto',
+    senha: senhaAtual,
+    origem,
+    destino,
+    nivel,
+    genero
+  });
+
+  if (res.status === 'sucesso') {
+    document.getElementById('textoGeradoIA').textContent = res.texto;
+    document.getElementById('inputTraducaoIA').value = '';
+    document.getElementById('areaExercicioIA').classList.remove('oculto');
+  } else {
+    msg.textContent = res.mensagem === 'SEM_CHAVE'
+      ? 'Cole sua chave gratuita do Google AI Studio na constante GEMINI_API_KEY do Apps Script.'
+      : (res.mensagem || 'Erro ao gerar texto.');
+    msg.className = 'alerta erro';
+  }
+
+  btn.disabled = false;
+  btn.textContent = '✨ Gerar Trecho de História';
+});
+
+document.getElementById('btnOuvirTextoIA').addEventListener('click', () => {
+  const texto = document.getElementById('textoGeradoIA').textContent;
+  const origem = document.getElementById('iaIdiomaOrigem').value;
+  falarTextoLivre(texto, 0.95, origem);
+});
+
+document.getElementById('btnCorrigirIA').addEventListener('click', async () => {
+  const btn = document.getElementById('btnCorrigirIA');
+  const original = document.getElementById('textoGeradoIA').textContent;
+  const traducao = document.getElementById('inputTraducaoIA').value.trim();
+  const origem = document.getElementById('iaIdiomaOrigem').value;
+  const destino = document.getElementById('iaIdiomaDestino').value;
+
+  if (!traducao) return;
+
+  btn.disabled = true;
+  btn.textContent = '🔍 Avaliando...';
+
+  const res = await enviarPost({
+    acao: 'ia_corrigir_traducao',
+    senha: senhaAtual,
+    origem,
+    destino,
+    original,
+    traducao
+  });
+
+  if (res.status === 'sucesso') {
+    document.getElementById('textoFeedbackIA').textContent = res.feedback;
+    document.getElementById('boxFeedbackIA').classList.remove('oculto');
+  } else {
+    const msg = document.getElementById('msgIA');
+    msg.textContent = res.mensagem || 'Erro ao corrigir tradução.';
+    msg.className = 'alerta erro';
+  }
+
+  btn.disabled = false;
+  btn.textContent = '🔍 Corrigir Tradução';
+});
+
+document.getElementById('btnSalvarTreinoIA').addEventListener('click', async () => {
+  const btn = document.getElementById('btnSalvarTreinoIA');
+  const original = document.getElementById('textoGeradoIA').textContent;
+  const traducao = document.getElementById('inputTraducaoIA').value.trim();
+  const feedback = document.getElementById('textoFeedbackIA').textContent;
+  const genero = document.getElementById('iaGenero').value || 'Prática IA';
+
+  btn.disabled = true;
+  btn.textContent = 'Salvando...';
+
+  const res = await enviarPost({
+    acao: 'criar_escrita',
+    senha: senhaAtual,
+    idioma: idiomaAtual,
+    titulo: `Tradução IA — ${genero}`,
+    texto: original,
+    traducao: `Minha tradução:\n${traducao}${feedback ? '\n\nCorreção:\n' + feedback : ''}`
+  });
+
+  const msg = document.getElementById('msgIA');
+  if (res.status === 'sucesso') {
+    msg.textContent = 'Treino salvo na sua lista de Escrita!';
+    msg.className = 'alerta sucesso';
+    await sincronizar(senhaAtual);
+  }
+
+  btn.disabled = false;
+  btn.textContent = '💾 Salvar no Caderno';
+});
+
+// 9. ESCRITA CRIATIVA COM 3 PALAVRAS DO BARALHO
+document.getElementById('escTexto').addEventListener('input', (e) => {
+  document.getElementById('contadorPalavrasEscrita').textContent = `${contarPalavras(e.target.value)} palavras`;
+});
+
 document.getElementById('btnSortearPrompt').addEventListener('click', () => {
   const box = document.getElementById('boxPromptSorteado');
-  const sorteado = PROMPTS_CRIATIVOS[Math.floor(Math.random() * PROMPTS_CRIATIVOS.length)];
-  box.textContent = `💡 Desafio: ${sorteado}`;
+  const tema = PROMPTS_CRIATIVOS[Math.floor(Math.random() * PROMPTS_CRIATIVOS.length)];
+
+  // Sorteia até 3 palavras do baralho atual para você encaixar no texto
+  const cardsDoIdioma = todosCards.filter(c => c.idioma === idiomaAtual);
+  const embaralhados = [...cardsDoIdioma].sort(() => 0.5 - Math.random()).slice(0, 3);
+  const palavrasAlvo = embaralhados.map(c => c.frente.replace(/[\[\]]/g, ''));
+
+  box.innerHTML = `
+    <strong>💡 Cena:</strong> ${escapeHTML(tema)}
+    ${palavrasAlvo.length > 0 ? `<br><strong>🎯 Tente encaixar do seu baralho:</strong> ${escapeHTML(palavrasAlvo.join(' • '))}` : ''}
+  `;
   box.classList.remove('oculto');
 });
 
@@ -748,6 +874,7 @@ document.getElementById('formNovaEscrita').addEventListener('submit', async (e) 
     msg.textContent = res.mensagem;
     msg.className = 'alerta sucesso';
     e.target.reset();
+    document.getElementById('contadorPalavrasEscrita').textContent = '0 palavras';
     document.getElementById('boxPromptSorteado').classList.add('oculto');
     await sincronizar(senhaAtual);
   } else {
@@ -786,7 +913,127 @@ function renderizarEscritas() {
   });
 }
 
-// 9. QUIZZES & TEACHER MODE
+// 10. ESTÚDIO DE FANFICS & HISTÓRIAS
+document.getElementById('ficConteudo').addEventListener('input', (e) => {
+  document.getElementById('contadorPalavrasFic').textContent = `${contarPalavras(e.target.value)} palavras`;
+});
+
+document.getElementById('btnNovaFicLimpar').addEventListener('click', () => {
+  document.getElementById('formFanfic').reset();
+  document.getElementById('ficIdEditando').value = '';
+  document.getElementById('contadorPalavrasFic').textContent = '0 palavras';
+  document.getElementById('boxFeedbackFicIA').classList.add('oculto');
+  document.getElementById('msgFic').className = 'alerta';
+});
+
+document.getElementById('formFanfic').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('btnSalvarFic');
+  const msg = document.getElementById('msgFic');
+
+  btn.disabled = true;
+  btn.textContent = 'Salvando...';
+  msg.className = 'alerta';
+
+  const idAtual = document.getElementById('ficIdEditando').value;
+
+  const res = await enviarPost({
+    acao: 'salvar_fanfic',
+    senha: senhaAtual,
+    id: idAtual ? Number(idAtual) : null,
+    idioma: idiomaAtual,
+    fandom: document.getElementById('ficFandom').value,
+    titulo: document.getElementById('ficTitulo').value,
+    conteudo: document.getElementById('ficConteudo').value,
+    notas: document.getElementById('ficNotas').value
+  });
+
+  if (res.status === 'sucesso') {
+    document.getElementById('ficIdEditando').value = res.id;
+    msg.textContent = res.mensagem;
+    msg.className = 'alerta sucesso';
+    await sincronizar(senhaAtual);
+  } else {
+    msg.textContent = res.mensagem || 'Erro ao salvar fanfic.';
+    msg.className = 'alerta erro';
+  }
+
+  btn.disabled = false;
+  btn.textContent = '💾 Salvar Capítulo';
+});
+
+document.getElementById('btnRevisarFicIA').addEventListener('click', async () => {
+  const btn = document.getElementById('btnRevisarFicIA');
+  const texto = document.getElementById('ficConteudo').value.trim();
+  if (!texto) return;
+
+  btn.disabled = true;
+  btn.textContent = '✨ Revisando...';
+
+  const res = await enviarPost({
+    acao: 'ia_revisar_fanfic',
+    senha: senhaAtual,
+    idioma: idiomaAtual,
+    texto
+  });
+
+  if (res.status === 'sucesso') {
+    document.getElementById('textoFeedbackFicIA').textContent = res.feedback;
+    document.getElementById('boxFeedbackFicIA').classList.remove('oculto');
+  } else {
+    const msg = document.getElementById('msgFic');
+    msg.textContent = res.mensagem === 'SEM_CHAVE'
+      ? 'Configure sua chave do Google AI Studio no Apps Script para usar a revisão literária.'
+      : (res.mensagem || 'Erro na revisão.');
+    msg.className = 'alerta erro';
+  }
+
+  btn.disabled = false;
+  btn.textContent = '✨ Revisão Literária (IA)';
+});
+
+function renderizarFanfics() {
+  const container = document.getElementById('listaFanfics');
+  const ficsDoIdioma = todasFanfics.filter(f => f.idioma === idiomaAtual);
+
+  if (ficsDoIdioma.length === 0) {
+    container.innerHTML = '<p class="texto-sec" style="text-align:center;">Nenhum capítulo escrito neste idioma ainda. Comece o primeiro acima!</p>';
+    return;
+  }
+
+  container.innerHTML = '';
+  ficsDoIdioma.forEach(f => {
+    const div = document.createElement('article');
+    div.className = 'nota-card';
+    div.innerHTML = `
+      <div class="nota-topo">
+        <span class="tag-tema">${escapeHTML(f.fandom)} • ${contarPalavras(f.conteudo)} palavras</span>
+        <div style="display:flex; gap:0.4rem;">
+          <button type="button" class="btn-audio-mini btn-ouvir-fic-item">🔊 Ouvir</button>
+          <button type="button" class="btn-audio-mini btn-editar-fic-item">✏️ Continuar editando</button>
+        </div>
+      </div>
+      <h3>${escapeHTML(f.titulo)}</h3>
+      <p>${escapeHTML(f.conteudo)}</p>
+      ${f.notas ? `<p class="escrita-traducao">${escapeHTML(f.notas)}</p>` : ''}
+    `;
+
+    div.querySelector('.btn-ouvir-fic-item').addEventListener('click', () => falarTextoLivre(f.conteudo, 0.95));
+    div.querySelector('.btn-editar-fic-item').addEventListener('click', () => {
+      document.getElementById('ficIdEditando').value = f.id;
+      document.getElementById('ficFandom').value = f.fandom;
+      document.getElementById('ficTitulo').value = f.titulo;
+      document.getElementById('ficConteudo').value = f.conteudo;
+      document.getElementById('ficNotas').value = f.notas;
+      document.getElementById('contadorPalavrasFic').textContent = `${contarPalavras(f.conteudo)} palavras`;
+      document.getElementById('formFanfic').scrollIntoView({ behavior: 'smooth' });
+    });
+
+    container.appendChild(div);
+  });
+}
+
+// 11. QUIZZES & MODO PROFESSOR
 document.getElementById('formNovoQuiz').addEventListener('submit', async (e) => {
   e.preventDefault();
   const btn = document.getElementById('btnEnviarQuiz');
@@ -822,7 +1069,6 @@ function renderizarQuizzes() {
   const container = document.getElementById('listaQuizzes');
   const isTeacher = roleAtual === 'teacher';
 
-  // Teachers see all quizzes they created; students see quizzes for the selected language
   const lista = isTeacher
     ? todosQuizzes
     : todosQuizzes.filter(q => q.idioma === idiomaAtual);
@@ -841,7 +1087,6 @@ function renderizarQuizzes() {
     let areaInteracao = '';
 
     if (!isTeacher) {
-      // STUDENT VIEW: Answer form or submitted answers + teacher feedback
       if (q.status === 'Pendente') {
         areaInteracao = `
           <form class="form-resp-quiz" data-id="${q.id}" style="margin-top:0.85rem;">
@@ -865,7 +1110,6 @@ function renderizarQuizzes() {
         `;
       }
     } else {
-      // TEACHER VIEW: Grade student submission
       areaInteracao = `
         <div class="quiz-bloco">
           <strong>Respostas do Aluno (${escapeHTML(q.aluno)}):</strong>
@@ -892,7 +1136,6 @@ function renderizarQuizzes() {
       ${areaInteracao}
     `;
 
-    // Student submits answers
     const formResp = div.querySelector('.form-resp-quiz');
     if (formResp) {
       formResp.addEventListener('submit', async (e) => {
@@ -906,7 +1149,6 @@ function renderizarQuizzes() {
       });
     }
 
-    // Teacher saves markup/feedback
     const formCorr = div.querySelector('.form-corr-quiz');
     if (formCorr) {
       formCorr.addEventListener('submit', async (e) => {
