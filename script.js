@@ -1,4 +1,4 @@
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwI2PyEPgVWgchLsWZL9zlFLqW_bVmcc14CC6CRpInN1zytic78OCViI-kGHcPYoYGp2Q/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby-xu-BGCaG9eWJ6vtfkPOQ8tTWH4ofNNyjeq8rIWOUo__R32SWb6thI9mobl4ZRZ_o9w/exec';
 
 const IDIOMAS_CONFIG = {
   Chines: {
