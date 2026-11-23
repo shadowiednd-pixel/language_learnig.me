@@ -357,7 +357,13 @@ async function sincronizar(senha) {
     usuarioAtual = dados.usuario;
     roleAtual = dados.role;
     hojeServidor = dados.hoje;
-    todosCards = dados.cards;
+
+    // Cria um identificador único por linha (_uid) para evitar conflito se houver IDs repetidos na planilha
+    todosCards = (dados.cards || []).map((c, idx) => ({
+      ...c,
+      _uid: `${c.id}_${idx}_${c.frente}`
+    }));
+
     todasNotas = dados.notas;
     todasEscritas = dados.escritas || [];
     todosQuizzes = dados.quizzes || [];
@@ -415,8 +421,8 @@ function montarFilaRevisao() {
     return mesmoIdioma && mesmaCat && vencidoHoje;
   });
 
-  const naoVistos = pendentes.filter(c => !cardsFeitosSessao.includes(c.id));
-  const erradosHoje = pendentes.filter(c => cardsFeitosSessao.includes(c.id));
+  const naoVistos = pendentes.filter(c => !cardsFeitosSessao.includes(c._uid));
+  const erradosHoje = pendentes.filter(c => cardsFeitosSessao.includes(c._uid));
 
   filaRevisao = [...naoVistos, ...erradosHoje];
   indiceCardAtual = 0;
@@ -424,15 +430,17 @@ function montarFilaRevisao() {
   exibirCardAtual();
 }
 
-function avancarProximoCardLocal(cardId, acertou) {
-  if (!cardsFeitosSessao.includes(cardId)) {
-    cardsFeitosSessao.push(cardId);
+function avancarProximoCardLocal(cardObj, acertou) {
+  if (!cardsFeitosSessao.includes(cardObj._uid)) {
+    cardsFeitosSessao.push(cardObj._uid);
   }
 
-  const cardAtualObj = filaRevisao.shift();
+  // Remove exatamente o card que acabou de ser respondido
+  filaRevisao = filaRevisao.filter(c => c._uid !== cardObj._uid);
 
-  if (!acertou && cardAtualObj) {
-    filaRevisao.push(cardAtualObj);
+  // Se errou, coloca esse card no final da fila de hoje (só volta depois de todos os outros)
+  if (!acertou) {
+    filaRevisao.push(cardObj);
   }
 
   document.getElementById('qtdPendentes').textContent = filaRevisao.length;
@@ -479,7 +487,7 @@ function exibirCardAtual() {
 }
 
 // VERIFICAÇÃO AUTOMÁTICA + AVANÇO RÁPIDO
-document.getElementById('formCheckResposta').addEventListener('submit', async (e) => {
+document.getElementById('formCheckResposta').addEventListener('submit', (e) => {
   e.preventDefault();
   if (bloqueioAutoCard || filaRevisao.length === 0) return;
 
@@ -501,6 +509,7 @@ document.getElementById('formCheckResposta').addEventListener('submit', async (e
   if (acertou) {
     feedback.textContent = `✅ Correto! (${card.traducao})`;
     feedback.className = 'feedback-auto acerto';
+    card.proximaRevisao = '9999-12-31';
   } else {
     feedback.textContent = `❌ Resposta: ${card.traducao} (vai para o fim da fila)`;
     feedback.className = 'feedback-auto erro';
@@ -511,13 +520,11 @@ document.getElementById('formCheckResposta').addEventListener('submit', async (e
     senha: senhaAtual,
     id: card.id,
     resultado: acertou ? 'bom' : 'errei'
-  }).then(() => {
-    if (acertou) card.proximaRevisao = '9999-12-31';
   });
 
   setTimeout(() => {
-    avancarProximoCardLocal(card.id, acertou);
-  }, 1300);
+    avancarProximoCardLocal(card, acertou);
+  }, 1200);
 });
 
 document.getElementById('btnVirarCard').addEventListener('click', () => {
@@ -533,16 +540,18 @@ document.querySelectorAll('.btn-srs').forEach(btn => {
     const res = btn.dataset.res;
     const acertou = res !== 'errei';
 
+    if (acertou) {
+      card.proximaRevisao = '9999-12-31';
+    }
+
     enviarPost({
       acao: 'revisar_card',
       senha: senhaAtual,
       id: card.id,
       resultado: res
-    }).then(() => {
-      if (acertou) card.proximaRevisao = '9999-12-31';
     });
 
-    avancarProximoCardLocal(card.id, acertou);
+    avancarProximoCardLocal(card, acertou);
   });
 });
 
