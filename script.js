@@ -95,6 +95,7 @@ let todasNotas = [];
 let todasEscritas = [];
 let todasFanfics = [];
 let todosQuizzes = [];
+let listaAlunos = [];
 let todoProgresso = [];
 let filaRevisao = [];
 let cardsFeitosSessao = [];
@@ -165,6 +166,23 @@ function iniciarInterfaceLogada() {
   document.getElementById('boxEnviarParaAluno').classList.toggle('oculto', !isTeacher);
   document.getElementById('painelCriarQuiz').classList.toggle('oculto', !isTeacher);
   document.getElementById('navLabelQuiz').textContent = isTeacher ? 'Prof / Quiz' : 'Quizzes';
+
+  if (isTeacher) {
+    const selCard = document.getElementById('selectDestinatarioCard');
+    const selQuiz = document.getElementById('selectAlunoQuiz');
+    selCard.innerHTML = '<option value="PROPRIO">Meu próprio baralho</option>';
+    selQuiz.innerHTML = '';
+
+    listaAlunos.forEach(aluno => {
+      selCard.add(new Option(`🎓 Enviar para ${aluno}`, aluno));
+      selQuiz.add(new Option(`📖 ${aluno}`, aluno));
+    });
+
+    if (listaAlunos.length > 1) {
+      selCard.add(new Option('🎓 Enviar para TODOS os alunos', 'TODOS'));
+      selQuiz.add(new Option('👥 TODOS os alunos', 'TODOS'));
+    }
+  }
 
   popularSelectsIA();
   renderizarBarraIdiomas();
@@ -391,6 +409,7 @@ async function sincronizar(senha) {
     usuarioAtual = dados.usuario;
     roleAtual = dados.role;
     hojeServidor = dados.hoje;
+    listaAlunos = dados.alunos || ['Amigo', 'Amigo1', 'Amigo2', 'Amigo3'];
 
     todosCards = (dados.cards || []).map((c, idx) => ({
       ...c,
@@ -614,7 +633,7 @@ document.getElementById('formNovoCard').addEventListener('submit', async (e) => 
     acao: 'criar_card',
     senha: senhaAtual,
     idioma: idiomaAtual,
-    paraAluno: document.getElementById('checkParaAluno').checked,
+    destinatario: document.getElementById('selectDestinatarioCard').value,
     categoria: document.getElementById('cardCatInput').value,
     frente: document.getElementById('cardFrenteInput').value,
     extra: document.getElementById('cardExtraInput').value,
@@ -1117,6 +1136,7 @@ document.getElementById('formNovoQuiz').addEventListener('submit', async (e) => 
     acao: 'criar_quiz',
     senha: senhaAtual,
     idioma: idiomaAtual,
+    alunoAlvo: document.getElementById('selectAlunoQuiz').value,
     titulo: document.getElementById('quizTitulo').value,
     perguntas: document.getElementById('quizPerguntas').value
   });
@@ -1132,16 +1152,13 @@ document.getElementById('formNovoQuiz').addEventListener('submit', async (e) => 
   }
 
   btn.disabled = false;
-  btn.textContent = 'Enviar Quiz para o Aluno';
+  btn.textContent = 'Enviar Quiz';
 });
 
 function renderizarQuizzes() {
   const container = document.getElementById('listaQuizzes');
   const isTeacher = roleAtual === 'teacher';
-
-  const lista = isTeacher
-    ? todosQuizzes
-    : todosQuizzes.filter(q => q.idioma === idiomaAtual);
+  const lista = todosQuizzes;
 
   if (lista.length === 0) {
     container.innerHTML = '<p class="texto-sec" style="text-align:center;">Nenhum quiz disponível aqui ainda.</p>';
@@ -1198,7 +1215,7 @@ function renderizarQuizzes() {
         <span class="tag-tema">${cfg.bandeira} ${cfg.nome} • ${escapeHTML(q.data)}</span>
         <span class="status-pill ${escapeHTML(q.status)}">${escapeHTML(q.status)}</span>
       </div>
-      <h3>${escapeHTML(q.titulo)}</h3>
+      <h3>${escapeHTML(q.titulo)} ${isTeacher ? `<small class="texto-sec">(${escapeHTML(q.aluno)})</small>` : ''}</h3>
       <div class="quiz-bloco">
         <strong>Perguntas:</strong>
         <p>${escapeHTML(q.perguntas)}</p>

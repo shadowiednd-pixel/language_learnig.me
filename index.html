@@ -133,10 +133,10 @@
           <p class="texto-sec" style="margin-top:0.25rem;">Dica avançada: use colchetes para criar lacunas, ex.: <code>Han [tvekade] innan han gick.</code></p>
           <form id="formNovoCard">
             <div id="boxEnviarParaAluno" class="box-teacher-check oculto">
-              <label class="check-idioma-item">
-                <input type="checkbox" id="checkParaAluno">
-                <span>🎓 Enviar este card diretamente para o baralho do meu amigo</span>
-              </label>
+              <label for="selectDestinatarioCard">🎓 Destinatário do Card</label>
+              <select id="selectDestinatarioCard">
+                <option value="PROPRIO">Meu próprio baralho</option>
+              </select>
             </div>
 
             <label for="cardCatInput">Categoria</label>
@@ -381,16 +381,19 @@
             <h2>🎓 Modo Professor — Criar Quiz</h2>
             <span class="tag-tema" id="quizIdiomaBadge">Idioma</span>
           </div>
-          <p class="texto-sec" style="margin-bottom: 0.5rem;">Crie exercícios curtos para seu amigo responder pelo celular dele.</p>
+          <p class="texto-sec" style="margin-bottom: 0.5rem;">Crie exercícios curtos para seus amigos responderem pelo celular deles.</p>
 
           <form id="formNovoQuiz">
+            <label for="selectAlunoQuiz">Para qual aluno(a)?</label>
+            <select id="selectAlunoQuiz"></select>
+
             <label for="quizTitulo">Título da Lição / Quiz *</label>
             <input type="text" id="quizTitulo" required placeholder="Ex.: Quiz 01 — Verbo To Be & Saudações">
 
             <label for="quizPerguntas">Perguntas / Exercícios *</label>
             <textarea id="quizPerguntas" rows="5" required placeholder="1. Como se diz 'Bom dia, tudo bem?' em inglês?&#10;2. Complete: I ___ a student.&#10;3. Traduza: She likes coffee."></textarea>
 
-            <button type="submit" id="btnEnviarQuiz" class="btn-tema full">Enviar Quiz para o Aluno</button>
+            <button type="submit" id="btnEnviarQuiz" class="btn-tema full">Enviar Quiz</button>
           </form>
           <div id="msgQuiz" class="alerta"></div>
         </div>
